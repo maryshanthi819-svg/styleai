@@ -10,8 +10,9 @@ from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_from_directory, redirect
 
 # ── Load env ──────────────────────────────────────────────────
+# override=False means Railway/system env vars take priority over .env file
 _env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
-load_dotenv(dotenv_path=_env_path, override=True)
+load_dotenv(dotenv_path=_env_path, override=False)
 
 # ── App setup ─────────────────────────────────────────────────
 app = Flask(__name__, static_folder='static')
