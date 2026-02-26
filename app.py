@@ -56,6 +56,8 @@ def detect_skin_tone(img_bytes):
         if img is None:
             return "Medium", 180, 140, 110
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        # Try face detection first for accurate skin sample
         try:
             cascade = cv2.CascadeClassifier(
                 cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
@@ -64,19 +66,52 @@ def detect_skin_tone(img_bytes):
             faces = cascade.detectMultiScale(gray, 1.1, 4)
             if len(faces) > 0:
                 x, y, w, h = faces[0]
-                cx, cy = x + w // 2, y + h // 2
-                sample = img_rgb[cy - h//6 : cy + h//6, cx - w//6 : cx + w//6]
+                # Sample forehead area — more accurate than centre face
+                fx = x + w // 4
+                fy = y + int(h * 0.1)
+                fw = w // 2
+                fh = int(h * 0.25)
+                sample = img_rgb[fy:fy+fh, fx:fx+fw]
+                if sample.size == 0:
+                    sample = img_rgb[y:y+h, x:x+w]
             else:
                 h, w = img_rgb.shape[:2]
-                sample = img_rgb[h//3 : 2*h//3, w//3 : 2*w//3]
+                sample = img_rgb[h//4 : 3*h//4, w//4 : 3*w//4]
         except Exception:
             h, w = img_rgb.shape[:2]
-            sample = img_rgb[h//3 : 2*h//3, w//3 : 2*w//3]
+            sample = img_rgb[h//4 : 3*h//4, w//4 : 3*w//4]
 
         avg = sample.mean(axis=(0, 1))
         r, g, b = int(avg[0]), int(avg[1]), int(avg[2])
-        br   = (r + g + b) / 3
-        tone = "Fair" if br > 200 else "Medium" if br > 160 else "Olive" if br > 120 else "Deep"
+
+        # Use ITA (Individual Typology Angle) — industry standard for skin tone
+        # ITA = arctan((L - 50) / b) × 180/π  where L,b are from Lab colorspace
+        lab_pixel = np.array([[[r, g, b]]], dtype=np.uint8)
+        lab = cv2.cvtColor(lab_pixel, cv2.COLOR_RGB2Lab)[0][0]
+        L  = lab[0] * 100.0 / 255.0   # L: 0-100
+        b_lab = lab[2] - 128.0         # b: -128 to 127
+
+        import math
+        if b_lab != 0:
+            ita = math.degrees(math.atan((L - 50) / b_lab))
+        else:
+            ita = 90.0 if L > 50 else -90.0
+
+        # ITA thresholds (Chardon et al. scale adapted for Indian skin)
+        # >55: Very Fair, 41-55: Fair, 28-41: Medium, 10-28: Olive, -30-10: Brown/Deep, <-30: Deep
+        if ita > 55:
+            tone = "Fair"
+        elif ita > 41:
+            tone = "Fair"
+        elif ita > 28:
+            tone = "Medium"
+        elif ita > 10:
+            tone = "Olive"
+        elif ita > -30:
+            tone = "Deep"
+        else:
+            tone = "Deep"
+
         return tone, r, g, b
     except Exception:
         return "Medium", 180, 140, 110
@@ -237,21 +272,32 @@ def analyze():
         style_ctx = f"Occasion: {occasion}. Extra style notes: {prompt}" if prompt \
                     else f"Occasion: {occasion}."
 
+        import random
+        palette_seed = random.choice([
+            "earthy tones", "jewel tones", "pastel tones", "monochromatic", "bold contrasts",
+            "muted neutrals", "warm tones", "cool tones", "festive Indian colors", "minimal palette"
+        ])
+
         ai_prompt = f"""You are an expert fashion stylist. A {gender} client has a {tone} skin tone (RGB: {r},{g},{b}).
 {style_ctx}
 
-IMPORTANT: Output ALL sections below. Never skip any section. Use EXACTLY this format with → prefix:
+IMPORTANT RULES:
+- Output ALL sections. Never skip any.
+- Use EXACTLY this format with → prefix.
+- Color palette MUST use {palette_seed} — pick 3 UNIQUE specific colors that are DIFFERENT from each other.
+- Every suggestion must be SPECIFICALLY tailored to {tone} skin tone with RGB ({r},{g},{b}).
+- Never repeat the same palette across sessions — be creative and vary your choices.
 
 DRESS_CODE
 → [dress code type]
 
 SUGGESTED_OUTFIT
-→ [Complete head-to-toe outfit in one vivid sentence]
+→ [Complete head-to-toe outfit in one vivid sentence tailored to {tone} skin tone]
 
 COLOR_PALETTE
-→ Primary: [one specific color name e.g. "Navy Blue", "Emerald Green"]
-→ Secondary: [one specific color name e.g. "Ivory", "Charcoal Grey"]
-→ Accent: [one specific color name e.g. "Gold", "Coral"]
+→ Primary: [specific color that flatters {tone} skin — NOT generic, e.g. "Burnt Sienna", "Cobalt Blue", "Forest Green"]
+→ Secondary: [different specific color, complementary to primary]
+→ Accent: [third specific color, contrasting pop]
 
 SHIRT_DETAILS
 → Color: [specific color]
@@ -281,15 +327,15 @@ HAIRSTYLE
 → Tip: [pro styling tip]
 
 WHY_IT_WORKS
-→ [2 sentences: why these choices complement this skin tone]
+→ [2 sentences: why these choices specifically complement {tone} skin tone with RGB {r},{g},{b}]
 
-Be specific and consider Indian fashion. Output ONLY the format above — no extra text."""
+Be specific, creative and consider Indian fashion. Output ONLY the format above — no extra text."""
 
         resp = client.chat.completions.create(
             messages=[{"role": "user", "content": ai_prompt}],
             model="llama-3.3-70b-versatile",
             max_tokens=2000,
-            temperature=0.7,
+            temperature=0.9,
         )
         raw      = resp.choices[0].message.content
         parsed   = parse_recs(raw)
