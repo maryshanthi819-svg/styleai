@@ -84,30 +84,20 @@ def detect_skin_tone(img_bytes):
         avg = sample.mean(axis=(0, 1))
         r, g, b = int(avg[0]), int(avg[1]), int(avg[2])
 
-        # Use ITA (Individual Typology Angle) — industry standard for skin tone
-        # ITA = arctan((L - 50) / b) × 180/π  where L,b are from Lab colorspace
-        lab_pixel = np.array([[[r, g, b]]], dtype=np.uint8)
-        lab = cv2.cvtColor(lab_pixel, cv2.COLOR_RGB2Lab)[0][0]
-        L  = lab[0] * 100.0 / 255.0   # L: 0-100
-        b_lab = lab[2] - 128.0         # b: -128 to 127
+        # Use HSV lightness for reliable skin tone classification
+        hsv_pixel = np.array([[[r, g, b]]], dtype=np.uint8)
+        hsv = cv2.cvtColor(hsv_pixel, cv2.COLOR_RGB2HSV)[0][0]
+        brightness = int(hsv[2])  # V channel 0-255
 
-        import math
-        if b_lab != 0:
-            ita = math.degrees(math.atan((L - 50) / b_lab))
-        else:
-            ita = 90.0 if L > 50 else -90.0
-
-        # Standard ITA scale (Chardon et al.) — universal, no bias
-        # >55: Very Light, 41-55: Light, 28-41: Intermediate, 10-28: Tan, -30-10: Brown, <-30: Dark
-        if ita > 55:
+        if brightness > 210:
             tone = "Fair"
-        elif ita > 41:
+        elif brightness > 180:
             tone = "Light"
-        elif ita > 28:
+        elif brightness > 148:
             tone = "Medium"
-        elif ita > 10:
+        elif brightness > 110:
             tone = "Tan"
-        elif ita > -30:
+        elif brightness > 75:
             tone = "Brown"
         else:
             tone = "Deep"
@@ -338,7 +328,12 @@ Be specific, creative and consider Indian fashion. Output ONLY the format above 
             temperature=0.9,
         )
         raw      = resp.choices[0].message.content
+        print("=== GROQ RAW OUTPUT ===")
+        print(raw)
+        print("=== PARSED ===")
         parsed   = parse_recs(raw)
+        print(parsed)
+        print("=== TONE:", tone, "ITA brightness:", brightness, "RGB:", r, g, b)
         products = build_shopping_from_recs(parsed, tone, gender, occasion)
 
         return jsonify({
