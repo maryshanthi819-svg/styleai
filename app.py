@@ -85,8 +85,8 @@ def detect_skin_tone(img_bytes):
         r, g, b = int(avg[0]), int(avg[1]), int(avg[2])
 
         # Use HSV lightness for reliable skin tone classification
-        hsv_pixel = np.array([[[r, g, b]]], dtype=np.uint8)
-        hsv = cv2.cvtColor(hsv_pixel, cv2.COLOR_RGB2HSV)[0][0]
+        hsv_pixel  = np.array([[[r, g, b]]], dtype=np.uint8)
+        hsv        = cv2.cvtColor(hsv_pixel, cv2.COLOR_RGB2HSV)[0][0]
         brightness = int(hsv[2])  # V channel 0-255
 
         if brightness > 210:
@@ -333,7 +333,7 @@ Be specific, creative and consider Indian fashion. Output ONLY the format above 
         print("=== PARSED ===")
         parsed   = parse_recs(raw)
         print(parsed)
-        print("=== TONE:", tone, "ITA brightness:", brightness, "RGB:", r, g, b)
+        print("=== TONE:", tone, "RGB:", r, g, b)
         products = build_shopping_from_recs(parsed, tone, gender, occasion)
 
         return jsonify({
