@@ -97,18 +97,18 @@ def detect_skin_tone(img_bytes):
         else:
             ita = 90.0 if L > 50 else -90.0
 
-        # ITA thresholds (Chardon et al. scale adapted for Indian skin)
-        # >55: Very Fair, 41-55: Fair, 28-41: Medium, 10-28: Olive, -30-10: Brown/Deep, <-30: Deep
+        # Standard ITA scale (Chardon et al.) — universal, no bias
+        # >55: Very Light, 41-55: Light, 28-41: Intermediate, 10-28: Tan, -30-10: Brown, <-30: Dark
         if ita > 55:
             tone = "Fair"
         elif ita > 41:
-            tone = "Fair"
+            tone = "Light"
         elif ita > 28:
             tone = "Medium"
         elif ita > 10:
-            tone = "Olive"
+            tone = "Tan"
         elif ita > -30:
-            tone = "Deep"
+            tone = "Brown"
         else:
             tone = "Deep"
 
